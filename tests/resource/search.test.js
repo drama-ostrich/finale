@@ -301,6 +301,7 @@ describe('Resource(search on included models)', function() {
       underscored: true,
       timestamps: false
     });
+
     test.models.Profile = test.db.define('profile', {
       id: { type: test.Sequelize.INTEGER, autoIncrement: true, primaryKey: true },
       nickname: { type: test.Sequelize.STRING }
@@ -308,9 +309,20 @@ describe('Resource(search on included models)', function() {
       underscored: true,
       timestamps: false
     });
+
     test.models.User.hasOne(test.models.Profile, {
       as: 'profile',
     });
+
+    test.models.Hobby = test.db.define('hobby', {
+      id: { type: test.Sequelize.INTEGER, autoIncrement: true, primaryKey: true },
+      name: { type: test.Sequelize.STRING }
+    }, {
+      underscored: true,
+      timestamps: false
+    });
+
+    test.models.User.hasMany(test.models.Hobby, {as: 'hobbies'});
 
     test.userlist = [
       { username: 'arthur', email: 'arthur@gmail.com' },
@@ -326,6 +338,19 @@ describe('Resource(search on included models)', function() {
       { nickname: 'asdfgh' },
       { nickname: 'mnbvcx' },
       { nickname: 'lkjhgf' }
+    ];
+
+    test.hobbylist = [
+      { name: 'reading' },
+      { name: 'bowling' },
+      { name: 'running' },
+      { name: 'swimming' },
+      { name: 'coding' },
+      { name: 'jumping' },
+      { name: 'climbing' },
+      { name: 'driving' },
+      { name: 'shopping' },
+      { name: 'drawing' }
     ];
   });
 
@@ -352,15 +377,24 @@ describe('Resource(search on included models)', function() {
 
         return Promise.all([
           test.models.User.bulkCreate(test.userlist),
-          test.models.Profile.bulkCreate(test.profilelist)
+          test.models.Profile.bulkCreate(test.profilelist),
+          test.models.Hobby.bulkCreate(test.hobbylist)
         ]).then(function(){
           return Promise.all([
             test.models.User.findAll(),
-            test.models.Profile.findAll()
+            test.models.Profile.findAll(),
+            test.models.Hobby.findAll()
           ]).then(function(results){
             const users = results[0];
             const profiles = results[1];
-            return Promise.all(users.map((u, i) => u.setProfile(profiles[i])));
+            const hobbies = results[2];
+            return Promise.all(users.map((u, i) => u.setProfile(profiles[i]))).then(
+              function(){
+                return Promise.all(users.map((u, i) => u.setHobbies(
+                  [hobbies[i], hobbies[i+5]]
+                )));
+              }
+            );
           });
         });
       });
@@ -399,6 +433,18 @@ describe('Resource(search on included models)', function() {
       expect(response.statusCode).to.equal(200);
       var records = JSON.parse(body).map(function(r) { delete r.id; return r; });
       expect(records.length).to.equal(1);
+      expect(records[0].profile.nickname).to.equal('qwerty');
+      done();
+    });
+  });
+
+  it.only('should search for a list of ids', function(done) {
+    var param = '?id=[1,2,3,4,5]';
+    const url = test.baseUrl + '/users' + param;
+    request.get({ url }, function(err, response, body) {
+      expect(response.statusCode).to.equal(200);
+      var records = JSON.parse(body).map(function(r) { delete r.id; return r; });
+      expect(records.length).to.equal(5);
       expect(records[0].profile.nickname).to.equal('qwerty');
       done();
     });
